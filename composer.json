@@ -1,0 +1,56 @@
+{
+    "name": "heybug/laravel",
+    "description": "HeyBug error tracking for Laravel",
+    "keywords": ["laravel", "error-tracking", "exception", "monitoring", "heybug", "bug-tracking", "error-reporting"],
+    "license": "MIT",
+    "type": "library",
+    "homepage": "https://heybug.io",
+    "authors": [
+        {
+            "name": "HeyBug",
+            "email": "support@heybug.io",
+            "homepage": "https://heybug.io"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/heybugio/heybugio/issues",
+        "source": "https://github.com/heybugio/heybugio"
+    },
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^12.0",
+        "illuminate/http": "^12.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0",
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "HeyBug\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "HeyBug\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "HeyBug\\HeyBugServiceProvider"
+            ],
+            "aliases": {
+                "HeyBug": "HeyBug\\Facades\\HeyBug"
+            }
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
