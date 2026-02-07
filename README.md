@@ -6,9 +6,9 @@
 
 Laravel 12.x package for logging errors to [heybug.io](https://heybug.io)
 
-[![Software License](https://poser.pugx.org/heybug/laravel/license.svg)](LICENSE.md)
-[![Latest Version on Packagist](https://poser.pugx.org/heybug/laravel/v/stable.svg)](https://packagist.org/packages/heybug/laravel)
-[![Total Downloads](https://poser.pugx.org/heybug/laravel/d/total.svg)](https://packagist.org/packages/heybug/laravel)
+[![Software License](https://poser.pugx.org/heybugio/heybugio/license.svg)](LICENSE.md)
+[![Latest Version on Packagist](https://poser.pugx.org/heybugio/heybugio/v/stable.svg)](https://packagist.org/packages/heybugio/heybugio)
+[![Total Downloads](https://poser.pugx.org/heybugio/heybugio/d/total.svg)](https://packagist.org/packages/heybugio/heybugio)
 
 ## Version Support
 
@@ -21,7 +21,7 @@ Laravel 12.x package for logging errors to [heybug.io](https://heybug.io)
 Install the package via composer:
 
 ```bash
-composer require heybug/laravel
+composer require heybugio/heybugio
 ```
 
 Publish the config file:
