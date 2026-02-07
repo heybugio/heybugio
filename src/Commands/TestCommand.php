@@ -79,8 +79,8 @@ class TestCommand extends Command
             return true;
         }
 
-        $this->error('✗ No DSN or API credentials configured.');
-        $this->line('  Set HEYBUG_DSN in your .env file.');
+        $this->error('✗ No API credentials configured.');
+        $this->line('  Set HEYBUG_API_KEY and HEYBUG_PROJECT_ID in your .env file.');
 
         return false;
     }

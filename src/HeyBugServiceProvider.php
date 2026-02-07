@@ -4,9 +4,12 @@ namespace HeyBug;
 
 use HeyBug\Commands\TestCommand;
 use HeyBug\Http\Client;
+use HeyBug\Logger\HeyBugHandler;
 use HeyBug\Queue\JobEventSubscriber;
 use HeyBug\Support\Dsn;
+use Illuminate\Log\LogManager;
 use Illuminate\Support\ServiceProvider;
+use Monolog\Logger;
 
 class HeyBugServiceProvider extends ServiceProvider
 {
@@ -25,6 +28,20 @@ class HeyBugServiceProvider extends ServiceProvider
                 new JobEventSubscriber($this->app[Client::class])
             );
         }
+
+        $this->registerLogDriver();
+    }
+
+    protected function registerLogDriver(): void
+    {
+        $this->app->make(LogManager::class)->extend('heybug', function ($app, array $config) {
+            $handler = new HeyBugHandler(
+                $app['heybug'],
+                $config['level'] ?? 'error'
+            );
+
+            return new Logger('heybug', [$handler]);
+        });
     }
 
     public function register(): void

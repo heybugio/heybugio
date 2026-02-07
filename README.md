@@ -35,10 +35,11 @@ php artisan vendor:publish --provider="HeyBug\HeyBugServiceProvider"
 Add the following environment variables to your `.env`:
 
 ```env
-HEYBUG_DSN=https://your-api-key:your-project-id@api.heybug.io
+HEYBUG_API_KEY=your-api-key
+HEYBUG_PROJECT_ID=your-project-id
 ```
 
-Get your DSN from [heybug.io](https://heybug.io) after creating a project.
+Get your API key and project ID from [heybug.io](https://heybug.io) after creating a project.
 
 ## Testing Your Configuration
 
@@ -50,17 +51,23 @@ php artisan heybug:test
 
 ## Reporting Unhandled Exceptions
 
-In your `bootstrap/app.php` file, add the HeyBug exception handler:
+Add HeyBug as a log channel in `config/logging.php`:
 
 ```php
-use HeyBug\Facades\HeyBug;
+'channels' => [
+    'stack' => [
+        'driver' => 'stack',
+        'channels' => ['single', 'heybug'],
+    ],
 
-->withExceptions(function (Exceptions $exceptions) {
-    $exceptions->report(function (Throwable $e) {
-        HeyBug::handle($e);
-    });
-})
+    'heybug' => [
+        'driver' => 'heybug',
+        'level' => 'error',
+    ],
+],
 ```
+
+That's it! All unhandled exceptions will now be reported to HeyBug.
 
 **Note:** By default, only production environments will report errors. You can adjust this in the `config/heybug.php` file.
 

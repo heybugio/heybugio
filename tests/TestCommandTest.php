@@ -58,7 +58,7 @@ class TestCommandTest extends TestCase
         config(['heybug.project_id' => '']);
 
         $this->artisan('heybug:test')
-            ->expectsOutput('✗ No DSN or API credentials configured.')
+            ->expectsOutput('✗ No API credentials configured.')
             ->assertFailed();
     }
 
