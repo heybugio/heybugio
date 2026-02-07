@@ -1,5 +1,5 @@
 {
-    "name": "heybug/laravel",
+    "name": "heybugio/heybugio",
     "description": "HeyBug error tracking for Laravel",
     "keywords": ["laravel", "error-tracking", "exception", "monitoring", "heybug", "bug-tracking", "error-reporting"],
     "license": "MIT",
