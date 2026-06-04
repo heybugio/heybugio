@@ -4,7 +4,7 @@
 
 # HeyBug
 
-Laravel 12.x package for logging errors to [heybug.io](https://heybug.io)
+Laravel 12.x &amp; 13.x package for logging errors to [heybug.io](https://heybug.io)
 
 [![Software License](https://poser.pugx.org/heybugio/heybugio/license.svg)](LICENSE.md)
 [![Latest Version on Packagist](https://poser.pugx.org/heybugio/heybugio/v/stable.svg)](https://packagist.org/packages/heybugio/heybugio)
@@ -12,9 +12,9 @@ Laravel 12.x package for logging errors to [heybug.io](https://heybug.io)
 
 ## Version Support
 
-| PHP   | Laravel |
-|-------|---------|
-| 8.2+  | 12.x    |
+| PHP   | Laravel    |
+|-------|------------|
+| 8.2+  | 12.x, 13.x |
 
 ## Installation
 

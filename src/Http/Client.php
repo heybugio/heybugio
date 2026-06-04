@@ -30,7 +30,7 @@ class Client
                     'X-HeyBug-DSN' => $this->buildDsn(),
                     'Content-Type' => 'application/json',
                     'Accept' => 'application/json',
-                    'User-Agent' => 'HeyBug-Laravel-SDK/1.0',
+                    'User-Agent' => 'HeyBug-Laravel-SDK/1.1',
                 ])
                 ->post($this->server, array_merge([
                     'project' => $this->projectId,
