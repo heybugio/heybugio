@@ -48,6 +48,11 @@ class HeyBug
      * and shutdown functions, including Looping, which the queue worker
      * dispatches with `until()` — a non-null return there would halt the
      * worker's own check and stop it picking up jobs.
+     *
+     * Whatever the budget cuts short is abandoned rather than requeued, for
+     * the same reason a failed batch is: the buffer has already been emptied
+     * so that nothing can be delivered twice, and without a client-minted ID
+     * the server cannot collapse a duplicate if it were.
      */
     public function flush(): void
     {
@@ -58,18 +63,43 @@ class HeyBug
 
             $batch = $this->buffer->take();
 
+            $deadline = $this->flushDeadline();
+            $sent = 0;
+
             foreach ($batch->envelopes as $envelope) {
+                if ($sent > 0 && $deadline !== null && microtime(true) >= $deadline) {
+                    break;
+                }
+
                 $response = $this->client->report($envelope->toArray(), $envelope->type);
 
                 if ($response && $envelope->type === 'default') {
                     $this->lastExceptionId = $response['id'] ?? null;
                 }
+
+                $sent++;
             }
 
+            DropLog::abandoned($batch->count() - $sent, $this->flushTimeout(), 'report(s)');
             DropLog::record($batch->dropped, $this->buffer->limit(), 'report(s)');
         } catch (Throwable) {
             // Flushing must never escalate into the context that triggered it.
         }
+    }
+
+    /**
+     * When the current flush must stop starting new requests, if ever.
+     */
+    protected function flushDeadline(): ?float
+    {
+        $timeout = $this->flushTimeout();
+
+        return $timeout > 0 ? microtime(true) + $timeout : null;
+    }
+
+    protected function flushTimeout(): float
+    {
+        return max((float) config('heybug.flush_timeout', 15), 0);
     }
 
     /**

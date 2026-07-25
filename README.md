@@ -77,6 +77,37 @@ That's it! All unhandled exceptions will now be reported to HeyBug.
 Log::error('Gateway returned 500', ['exception' => $e]);
 ```
 
+## Deferred Delivery
+
+By default a report is POSTed inline, so the request or job waits for it. Turn that off to hold reports in memory and deliver them at the end of the current unit of work instead:
+
+```php
+'async' => env('HEYBUG_ASYNC', false),
+```
+
+Each context ends differently, so there is no single flush point. HTTP requests flush at `terminate()`, after the response has been sent. Queue workers flush on `JobAttempted`, which is dispatched after *every* attempt, including one that threw and will retry, plus `Looping` between jobs and `WorkerStopping` on graceful shutdown. Console commands flush at `CommandFinished`. A shutdown-function backstop catches fatals, though nothing can catch an OOM kill or a `SIGKILL`.
+
+This matters most for queue workers: they never call `terminate()` at all, and a worker is a single long-lived console command, so a report held for `CommandFinished` alone would sit in memory until the process exits and be lost when the worker is restarted on deploy.
+
+**This changes what `handle()` returns.** Deferred, it reports whether the exception was accepted for delivery, since no response exists yet. Inline, it still reports whether the server accepted it. `getLastExceptionId()` is likewise only populated once the flush has happened.
+
+Two ceilings keep a buffer from growing or blocking without bound:
+
+```php
+'buffer_limit' => 100,   // most reports held between flushes
+'flush_timeout' => 15,   // most seconds one flush may spend delivering
+```
+
+Reports beyond `buffer_limit`, and any a flush runs out of time to send, are dropped and the count is logged. Deferring moves delivery cost after the response, but it does not take it off the worker, which is what `flush_timeout` bounds. The first report in a batch is always attempted, so a short budget degrades to one report per flush rather than none. Set either to `0` for no ceiling.
+
+Diagnostics like those drop counts are written to a normal log channel, which must not be the `heybug` channel:
+
+```php
+'log_channel' => env('HEYBUG_LOG_CHANNEL', 'single'),
+```
+
+`heybug:test` always sends inline, whatever this is set to, since a diagnostic that reported "buffered" would tell you nothing about whether your credentials work.
+
 ## Adding Context
 
 You can add custom context data to your error reports:

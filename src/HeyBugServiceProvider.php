@@ -171,7 +171,13 @@ class HeyBugServiceProvider extends ServiceProvider
      * Every nested read currently passes an inline default, which masks it,
      * but that is a convention no one is obliged to follow: the first read
      * written without one would be null for every app that published early.
-     * Merging the defaults back in makes the guarantee structural instead.
+     * Merging the defaults back in covers that case.
+     *
+     * It does not replace the inline defaults. This runs at boot, so under a
+     * cached config — the normal state in production — the merge is baked in
+     * whenever the cache was last built, and an app that upgrades without
+     * rebuilding it keeps whatever its previous release wrote. The two
+     * together are what make a nested read safe; neither is sufficient.
      *
      * Only associative blocks are merged. Lists — `blacklist`, `except`,
      * `environments`, `user_attributes` — are replaced outright, which is

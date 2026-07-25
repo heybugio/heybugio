@@ -158,6 +158,75 @@ class DeferredReportingTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_it_abandons_the_rest_of_a_batch_when_the_flush_budget_runs_out(): void
+    {
+        Http::fake(function () {
+            usleep(20_000);
+
+            return Http::response(['ok' => true, 'id' => 'test-id'], 200);
+        });
+
+        config(['heybug.flush_timeout' => 0.01, 'heybug.sleep' => 0]);
+
+        Log::shouldReceive('channel')->andReturnSelf();
+        Log::shouldReceive('warning')
+            ->once()
+            ->withArgs(fn (string $message) => str_contains($message, 'abandoned 3 report(s)'));
+
+        $heybug = app(HeyBug::class);
+
+        foreach (range(1, 4) as $i) {
+            $heybug->handle(new Exception("Exception {$i}"));
+        }
+
+        $heybug->flush();
+
+        // The first is always attempted, so a short budget degrades to one
+        // report per flush rather than none.
+        Http::assertSentCount(1);
+    }
+
+    public function test_a_zero_flush_budget_means_no_ceiling(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true, 'id' => 'test-id'], 200),
+        ]);
+
+        config(['heybug.flush_timeout' => 0, 'heybug.sleep' => 0]);
+
+        $heybug = app(HeyBug::class);
+
+        foreach (range(1, 3) as $i) {
+            $heybug->handle(new Exception("Exception {$i}"));
+        }
+
+        $heybug->flush();
+
+        Http::assertSentCount(3);
+    }
+
+    public function test_a_batch_inside_the_budget_is_delivered_whole(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true, 'id' => 'test-id'], 200),
+        ]);
+
+        config(['heybug.sleep' => 0]);
+
+        Log::shouldReceive('channel')->andReturnSelf();
+        Log::shouldReceive('warning')->never();
+
+        $heybug = app(HeyBug::class);
+
+        foreach (range(1, 3) as $i) {
+            $heybug->handle(new Exception("Exception {$i}"));
+        }
+
+        $heybug->flush();
+
+        Http::assertSentCount(3);
+    }
+
     public function test_the_job_attempted_boundary_flushes(): void
     {
         Http::fake([

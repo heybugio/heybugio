@@ -104,6 +104,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Flush Budget
+    |--------------------------------------------------------------------------
+    |
+    | The most seconds a single flush may spend delivering a batch. Reports
+    | are sent one request at a time, so without a ceiling a full buffer
+    | against a slow endpoint could occupy the process for buffer_limit
+    | times the request timeout. Deferring moves that cost after the
+    | response; it does not take it off the worker.
+    |
+    | The first report in a batch is always attempted, so a short budget
+    | degrades to one report per flush rather than none. Set to 0 for no
+    | ceiling.
+    |
+    */
+    'flush_timeout' => 15,
+
+    /*
+    |--------------------------------------------------------------------------
     | Log Channel
     |--------------------------------------------------------------------------
     |
