@@ -12,6 +12,11 @@ use Throwable;
 
 class HeyBug
 {
+    /**
+     * The most source lines a single report may carry.
+     */
+    protected const MAX_EXECUTOR_LINES = 50;
+
     protected Client $client;
     protected DataFilter $dataFilter;
     protected ?string $lastExceptionId = null;
@@ -149,6 +154,20 @@ class HeyBug
         return [];
     }
 
+    /**
+     * How many lines of source to include on each side of the failing line.
+     *
+     * heybug.lines_count is a half-window, so 12 yields 25 lines in total.
+     * The cap applies to that total, not to the half-window, so the payload
+     * never exceeds MAX_EXECUTOR_LINES however the option is set.
+     */
+    protected function executorHalfWindow(): int
+    {
+        $count = max((int) config('heybug.lines_count', 12), 0);
+
+        return min($count, intdiv(self::MAX_EXECUTOR_LINES - 1, 2));
+    }
+
     protected function buildExecutor(Throwable $exception): array
     {
         $lines = @file($exception->getFile());
@@ -157,7 +176,7 @@ class HeyBug
             return [];
         }
 
-        $count = min(config('heybug.lines_count', 12), 50);
+        $count = $this->executorHalfWindow();
         $errorLine = $exception->getLine();
         $executor = [];
 

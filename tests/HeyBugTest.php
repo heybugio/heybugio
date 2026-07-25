@@ -214,7 +214,7 @@ class HeyBugTest extends TestCase
 
         HeyBug::context(['order_id' => 123]);
 
-        event(new JobProcessing('sync', $this->createMock(Job::class)));
+        event(new JobProcessing('sync', $this->createStub(Job::class)));
 
         app(HeyBug::class)->handle(new Exception('Thrown by an unrelated job'));
 
@@ -352,6 +352,52 @@ class HeyBugTest extends TestCase
 
             return $parameters['password'] === 'hunter2'
                 && $parameters['legacy'] === '[FILTERED]';
+        });
+    }
+
+    public function test_it_sends_a_half_window_of_source_lines(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true, 'success' => true, 'id' => 'test-id'], 200),
+        ]);
+
+        config(['heybug.lines_count' => 3]);
+
+        app(HeyBug::class)->handle(new Exception('Test exception'));
+
+        Http::assertSent(function ($request) {
+            // 3 before, the failing line, 3 after.
+            return count($request['exception']['executor']) === 7;
+        });
+    }
+
+    public function test_it_caps_the_source_lines_it_sends(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true, 'success' => true, 'id' => 'test-id'], 200),
+        ]);
+
+        config(['heybug.lines_count' => 500]);
+
+        app(HeyBug::class)->handle(new Exception('Test exception'));
+
+        Http::assertSent(function ($request) {
+            return count($request['exception']['executor']) <= 50;
+        });
+    }
+
+    public function test_it_tolerates_a_negative_lines_count(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true, 'success' => true, 'id' => 'test-id'], 200),
+        ]);
+
+        config(['heybug.lines_count' => -5]);
+
+        app(HeyBug::class)->handle(new Exception('Test exception'));
+
+        Http::assertSent(function ($request) {
+            return count($request['exception']['executor']) === 1;
         });
     }
 

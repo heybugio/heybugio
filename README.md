@@ -115,7 +115,23 @@ The package always scrubs a baseline set of keys — passwords, tokens, secrets,
 ],
 ```
 
+Leave `blacklist` empty unless you have patterns of your own. That is the recommended steady state, not just a migration step — a hand-copied baseline sitting in a published config is exactly the drift this design exists to prevent.
+
 To scrub only your own patterns, set `'blacklist_defaults' => false`. This is all-or-nothing: there is no way to remove a single baseline pattern while keeping the rest.
+
+## Self-Hosted and Proxied Endpoints
+
+If you report to an endpoint whose certificate your PHP installation does not trust, turn off TLS verification:
+
+```php
+'verify_ssl' => env('HEYBUG_VERIFY_SSL', true),
+```
+
+Leave this on when reporting to `api.heybug.io`.
+
+## Code Context
+
+`lines_count` is the number of lines included on *each side* of the failing line, so the default of `12` sends 25 lines: 12 before, the failing line, and 12 after. The payload is capped at 50 lines however the option is set, so values above `24` have no further effect.
 
 ## Upgrading from 1.1.x
 

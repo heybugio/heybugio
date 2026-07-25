@@ -7,6 +7,25 @@ use Illuminate\Support\Facades\Http;
 
 class ClientTest extends TestCase
 {
+    public function test_it_verifies_tls_by_default(): void
+    {
+        $this->assertTrue($this->verifySslOf(app(Client::class)));
+    }
+
+    public function test_it_can_disable_tls_verification(): void
+    {
+        config(['heybug.verify_ssl' => false]);
+
+        $this->app->forgetInstance(Client::class);
+
+        $this->assertFalse($this->verifySslOf(app(Client::class)));
+    }
+
+    protected function verifySslOf(Client $client): bool
+    {
+        return (new \ReflectionProperty($client, 'verifySsl'))->getValue($client);
+    }
+
     public function test_it_sends_exception_report(): void
     {
         Http::fake([
@@ -21,7 +40,7 @@ class ClientTest extends TestCase
         Http::assertSent(function ($request) {
             return $request->url() === 'https://api.heybug.io'
                 && $request->hasHeader('X-HeyBug-DSN')
-                && $request->hasHeader('User-Agent', 'HeyBug-Laravel-SDK/1.2')
+                && $request->hasHeader('User-Agent', 'HeyBug-Laravel-SDK/1.3')
                 && $request['type'] === 'default'
                 && $request['project'] === 'project-id';
         });

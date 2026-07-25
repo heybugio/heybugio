@@ -80,6 +80,7 @@ class HeyBugServiceProvider extends ServiceProvider
 
         $this->app->singleton(Client::class, function () {
             $dsn = config('heybug.dsn');
+            $verifySsl = config('heybug.verify_ssl', true);
 
             if ($dsn && Dsn::isValid($dsn)) {
                 $parsed = Dsn::make($dsn);
@@ -87,14 +88,16 @@ class HeyBugServiceProvider extends ServiceProvider
                 return new Client(
                     $parsed->getApiKey(),
                     $parsed->getProjectId(),
-                    $parsed->getServer()
+                    $parsed->getServer(),
+                    $verifySsl
                 );
             }
 
             return new Client(
                 config('heybug.api_key', ''),
                 config('heybug.project_id', ''),
-                config('heybug.server', 'https://api.heybug.io')
+                config('heybug.server', 'https://api.heybug.io'),
+                $verifySsl
             );
         });
 

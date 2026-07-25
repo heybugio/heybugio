@@ -25,6 +25,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | TLS Verification
+    |--------------------------------------------------------------------------
+    |
+    | Set to false when reporting to a self-hosted or proxied endpoint that
+    | presents a certificate your PHP installation does not trust. Leave
+    | this on when reporting to api.heybug.io.
+    |
+    */
+    'verify_ssl' => env('HEYBUG_VERIFY_SSL', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Environment Filtering
     |--------------------------------------------------------------------------
     |
@@ -50,7 +62,10 @@ return [
     | Code Context
     |--------------------------------------------------------------------------
     |
-    | Number of lines around exception line to include (max 50).
+    | Lines of source to include on *each side* of the failing line, so the
+    | default of 12 produces 25 lines in total: 12 before, the failing line
+    | itself, and 12 after. The payload is capped at 50 lines however this
+    | is set, so values above 24 have no further effect.
     |
     */
     'lines_count' => 12,

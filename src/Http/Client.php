@@ -10,13 +10,15 @@ class Client
     protected string $apiKey;
     protected string $projectId;
     protected string $server;
+    protected bool $verifySsl;
     protected ?string $lastError = null;
 
-    public function __construct(string $apiKey, string $projectId, string $server)
+    public function __construct(string $apiKey, string $projectId, string $server, bool $verifySsl = true)
     {
         $this->apiKey = $apiKey;
         $this->projectId = $projectId;
         $this->server = $server;
+        $this->verifySsl = $verifySsl;
     }
 
     public function report(array $data, string $type = 'default'): ?array
@@ -30,13 +32,19 @@ class Client
         }
 
         try {
-            $response = Http::timeout(5)
+            $request = Http::timeout(5)
                 ->withHeaders([
                     'X-HeyBug-DSN' => $this->buildDsn(),
                     'Content-Type' => 'application/json',
                     'Accept' => 'application/json',
-                    'User-Agent' => 'HeyBug-Laravel-SDK/1.2',
-                ])
+                    'User-Agent' => 'HeyBug-Laravel-SDK/1.3',
+                ]);
+
+            if (! $this->verifySsl) {
+                $request = $request->withoutVerifying();
+            }
+
+            $response = $request
                 ->post($this->server, array_merge([
                     'project' => $this->projectId,
                     'type' => $type,
