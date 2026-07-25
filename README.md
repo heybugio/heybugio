@@ -100,7 +100,23 @@ Two ceilings keep a buffer from growing or blocking without bound:
 
 Reports beyond `buffer_limit`, and any a flush runs out of time to send, are dropped and the count is logged. Deferring moves delivery cost after the response, but it does not take it off the worker, which is what `flush_timeout` bounds. The first report in a batch is always attempted, so a short budget degrades to one report per flush rather than none. Set either to `0` for no ceiling.
 
-Diagnostics like those drop counts are written to a normal log channel, which must not be the `heybug` channel:
+## Payload Ceiling
+
+Nothing else bounds how large a single report can be. A large session bag, a big form post, or a minified file caught by the source window can each produce a payload of any size, and deferred delivery holds `buffer_limit` of them in memory before any is sent.
+
+```php
+'max_payload_size' => 65536,   // bytes; 0 for no ceiling
+```
+
+Over the ceiling, parts are shed in a fixed order until the report fits: custom context, session, parameters, cookies, headers, then the source window. A shed part is replaced with a marker rather than removed, so the report says what it lost:
+
+```php
+'SESSION' => ['_truncated' => true, '_original_size' => 214_388],
+```
+
+The order is fixed rather than largest-first so the outcome is predictable, and the fields a report exists to carry — class, file, line, message — are never shed. If a runaway exception message or stack trace is still over the ceiling once everything else has gone, those are clipped last.
+
+Diagnostics like drop counts are written to a normal log channel, which must not be the `heybug` channel:
 
 ```php
 'log_channel' => env('HEYBUG_LOG_CHANNEL', 'single'),

@@ -34,6 +34,29 @@ class HeyBugTest extends TestCase
         });
     }
 
+    public function test_it_keeps_a_reported_payload_within_the_ceiling(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true, 'id' => 'test-id'], 200),
+        ]);
+
+        config(['heybug.max_payload_size' => 4096]);
+
+        HeyBug::context(['cart' => str_repeat('x', 200_000)]);
+
+        app(HeyBug::class)->handle(new Exception('Oversized report'));
+
+        Http::assertSent(function ($request) {
+            $exception = $request['exception'];
+
+            $this->assertTrue($exception['custom_data']['_truncated']);
+            $this->assertSame('Oversized report', $exception['exception']);
+            $this->assertSame(Exception::class, $exception['class']);
+
+            return strlen((string) json_encode($exception)) <= 4096;
+        });
+    }
+
     public function test_it_will_not_crash_on_http_error(): void
     {
         Http::fake([

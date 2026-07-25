@@ -6,6 +6,7 @@ use HeyBug\Http\Client;
 use HeyBug\Reporting\Buffer;
 use HeyBug\Reporting\DropLog;
 use HeyBug\Reporting\Envelope;
+use HeyBug\Reporting\PayloadLimit;
 use HeyBug\Support\DataFilter;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\App;
@@ -228,7 +229,7 @@ class HeyBug
             $data['custom_data'] = self::$customContext;
         }
 
-        return $data;
+        return PayloadLimit::apply($data, (int) config('heybug.max_payload_size', 65536));
     }
 
     protected function buildStorage(): array

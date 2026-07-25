@@ -122,6 +122,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Payload Ceiling
+    |--------------------------------------------------------------------------
+    |
+    | The most bytes one report's JSON body may occupy. Nothing else bounds
+    | it: a large session bag, a big form post, or a minified file caught by
+    | the source window can each produce a payload of any size, and deferred
+    | delivery holds buffer_limit of them in memory before sending.
+    |
+    | Over the ceiling, parts are shed in a fixed order — custom context,
+    | session, parameters, cookies, headers, then the source window — until
+    | the report fits. The class, file, line and message a report exists to
+    | carry are never shed. Set to 0 for no ceiling.
+    |
+    */
+    'max_payload_size' => 65536,
+
+    /*
+    |--------------------------------------------------------------------------
     | Log Channel
     |--------------------------------------------------------------------------
     |
