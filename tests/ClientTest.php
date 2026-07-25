@@ -40,7 +40,7 @@ class ClientTest extends TestCase
         Http::assertSent(function ($request) {
             return $request->url() === 'https://api.heybug.io'
                 && $request->hasHeader('X-HeyBug-DSN')
-                && $request->hasHeader('User-Agent', 'HeyBug-Laravel-SDK/1.3')
+                && $request->hasHeader('User-Agent', 'HeyBug-Laravel-SDK/1.2')
                 && $request['type'] === 'default'
                 && $request['project'] === 'project-id';
         });

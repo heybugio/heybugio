@@ -20,10 +20,10 @@ class BufferTest extends TestCase
         $this->assertSame(2, $buffer->count());
         $this->assertFalse($buffer->isEmpty());
 
-        $taken = $buffer->take();
+        $batch = $buffer->take();
 
-        $this->assertCount(2, $taken);
-        $this->assertSame('first', $taken[0]->payload['exception']);
+        $this->assertCount(2, $batch->envelopes);
+        $this->assertSame('first', $batch->envelopes[0]->payload['exception']);
     }
 
     public function test_taking_empties_the_buffer(): void
@@ -34,7 +34,7 @@ class BufferTest extends TestCase
         $buffer->take();
 
         $this->assertTrue($buffer->isEmpty());
-        $this->assertSame([], $buffer->take());
+        $this->assertTrue($buffer->take()->isEmpty());
     }
 
     public function test_it_drops_incoming_envelopes_when_full(): void
@@ -57,10 +57,10 @@ class BufferTest extends TestCase
         $buffer->add($this->envelope('second'));
         $buffer->add($this->envelope('third'));
 
-        $taken = $buffer->take();
+        $batch = $buffer->take();
 
-        $this->assertSame('first', $taken[0]->payload['exception']);
-        $this->assertSame('second', $taken[1]->payload['exception']);
+        $this->assertSame('first', $batch->envelopes[0]->payload['exception']);
+        $this->assertSame('second', $batch->envelopes[1]->payload['exception']);
     }
 
     public function test_it_counts_every_drop(): void
@@ -74,22 +74,36 @@ class BufferTest extends TestCase
         }
 
         $this->assertSame(5, $buffer->dropped());
-
-        $buffer->resetDropped();
-
-        $this->assertSame(0, $buffer->dropped());
     }
 
-    public function test_taking_does_not_clear_the_drop_count(): void
+    public function test_taking_carries_the_drop_count_and_resets_it(): void
     {
         $buffer = new Buffer(limit: 1);
 
         $buffer->add($this->envelope('kept'));
         $buffer->add($this->envelope('dropped'));
-        $buffer->take();
 
-        // The drop has to outlive the flush, or nothing can report it.
-        $this->assertSame(1, $buffer->dropped());
+        $batch = $buffer->take();
+
+        // The drop travels with the batch it belongs to...
+        $this->assertSame(1, $batch->dropped);
+
+        // ...and does not compound into the next boundary.
+        $this->assertSame(0, $buffer->dropped());
+        $this->assertSame(0, $buffer->take()->dropped);
+    }
+
+    public function test_a_batch_of_only_drops_is_not_empty(): void
+    {
+        $buffer = new Buffer(limit: 0);
+
+        $buffer->add($this->envelope('dropped'));
+
+        $batch = $buffer->take();
+
+        // Nothing to send, but something to report.
+        $this->assertSame([], $batch->envelopes);
+        $this->assertFalse($batch->isEmpty());
     }
 
     public function test_room_frees_up_after_taking(): void

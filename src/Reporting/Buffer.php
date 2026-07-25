@@ -47,21 +47,26 @@ class Buffer
     }
 
     /**
-     * Take everything currently buffered, leaving the buffer empty.
+     * Take everything this boundary is responsible for, emptying the buffer.
      *
-     * The buffer is cleared before the caller does anything with the
-     * envelopes, so a failing flush cannot leave the same reports queued
-     * for the next boundary and deliver them twice.
+     * The buffer is cleared before the caller does anything with the batch,
+     * so a failing flush cannot leave the same reports queued for the next
+     * boundary and deliver them twice. That costs the batch on failure
+     * rather than risking duplicates; once envelopes carry a client-minted
+     * ID the server can collapse retries, and a re-queueing variant of this
+     * method becomes safe to add alongside it.
      *
-     * @return list<Envelope>
+     * The drop count is returned and reset together with the envelopes so
+     * the two cannot drift apart across boundaries.
      */
-    public function take(): array
+    public function take(): Batch
     {
-        $envelopes = $this->envelopes;
+        $batch = new Batch($this->envelopes, $this->dropped);
 
         $this->envelopes = [];
+        $this->dropped = 0;
 
-        return $envelopes;
+        return $batch;
     }
 
     public function isEmpty(): bool
@@ -75,16 +80,15 @@ class Buffer
     }
 
     /**
-     * How many envelopes have been dropped for overflow since the last reset.
+     * How many envelopes have been dropped for overflow since the last take.
+     *
+     * Read-only; taking a batch is what clears it. There is deliberately no
+     * separate reset, so no caller can clear the count without also taking
+     * responsibility for the envelopes it belongs to.
      */
     public function dropped(): int
     {
         return $this->dropped;
-    }
-
-    public function resetDropped(): void
-    {
-        $this->dropped = 0;
     }
 
     public function limit(): int

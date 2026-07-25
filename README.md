@@ -117,6 +117,8 @@ The package always scrubs a baseline set of keys — passwords, tokens, secrets,
 
 Leave `blacklist` empty unless you have patterns of your own. That is the recommended steady state, not just a migration step — a hand-copied baseline sitting in a published config is exactly the drift this design exists to prevent.
 
+> **An empty `blacklist` requires 1.2.1 or later.** Before 1.2.1 there is no baseline: `DataFilter` is built straight from `config('heybug.blacklist')`, so an empty list scrubs *nothing* and credentials are sent in plaintext. Downgrading below 1.2.1 with an emptied config — a stale `composer.lock`, a branch pinned at `^1.1`, a deploy that skipped `composer install` — fails silently, with no error and no visible symptom. Pin `^1.2.1` or higher before emptying the key. If you cannot guarantee that floor across every environment, keep an explicit list instead.
+
 To scrub only your own patterns, set `'blacklist_defaults' => false`. This is all-or-nothing: there is no way to remove a single baseline pattern while keeping the rest.
 
 ## Self-Hosted and Proxied Endpoints
@@ -146,6 +148,8 @@ Leave this on when reporting to `api.heybug.io`.
 `*key*` also redacts `monkey`, `keyword`, and `sort_key`; `*auth*` also redacts `author` and `authored_at`; `*card*` also redacts `discard` and `wildcard`. Those are over-redactions, not leaks, so this is not urgent — but until you act, those fields keep arriving as `[FILTERED]`.
 
 Either delete the `blacklist` key from your published config (recommended — you then inherit the baseline and every future addition to it), or replace its contents with only the patterns you want to add on top of the baseline.
+
+**Pin `^1.2.1` before you delete it.** The baseline that makes an empty `blacklist` safe does not exist in 1.2.0 or earlier — there, an empty list means nothing is scrubbed at all, silently. If any environment could resolve an older release, keep an explicit list rather than deleting the key.
 
 Keys the package added in this release — `send_user`, `user_attributes`, `blacklist_defaults` — back-fill automatically, since a published file predating them has nothing to override.
 

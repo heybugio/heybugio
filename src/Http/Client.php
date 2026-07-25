@@ -7,6 +7,15 @@ use Throwable;
 
 class Client
 {
+    /**
+     * The SDK version reported in the User-Agent header.
+     *
+     * Keep this in step with the released tag. It is server-side telemetry,
+     * so bumping it ahead of a release misattributes every install until
+     * that release actually ships.
+     */
+    public const SDK_VERSION = '1.2';
+
     protected string $apiKey;
     protected string $projectId;
     protected string $server;
@@ -37,7 +46,7 @@ class Client
                     'X-HeyBug-DSN' => $this->buildDsn(),
                     'Content-Type' => 'application/json',
                     'Accept' => 'application/json',
-                    'User-Agent' => 'HeyBug-Laravel-SDK/1.3',
+                    'User-Agent' => 'HeyBug-Laravel-SDK/'.self::SDK_VERSION,
                 ]);
 
             if (! $this->verifySsl) {
