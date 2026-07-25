@@ -30,6 +30,11 @@ class TestCommand extends Command
 
         $this->info('Sending test exception...');
 
+        // This is a diagnostic: it has to answer whether the credentials and
+        // endpoint actually work. Deferred, it could only report that the
+        // exception was buffered, which tells the user nothing.
+        config(['heybug.async' => false]);
+
         try {
             $message = $this->argument('exception')
                 ?? 'HeyBug test exception from console - ' . now()->toDateTimeString();

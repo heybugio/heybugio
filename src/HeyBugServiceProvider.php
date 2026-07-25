@@ -7,10 +7,15 @@ use HeyBug\Http\Client;
 use HeyBug\Logger\HeyBugHandler;
 use HeyBug\Queue\JobEventSubscriber;
 use HeyBug\Support\Dsn;
+use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Log\LogManager;
+use Illuminate\Queue\Events\JobAttempted;
 use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Queue\Events\Looping;
+use Illuminate\Queue\Events\WorkerStopping;
 use Illuminate\Support\ServiceProvider;
 use Monolog\Logger;
+use Throwable;
 
 class HeyBugServiceProvider extends ServiceProvider
 {
@@ -31,7 +36,66 @@ class HeyBugServiceProvider extends ServiceProvider
         }
 
         $this->registerContextFlushing();
+        $this->registerReportFlushing();
         $this->registerLogDriver();
+    }
+
+    /**
+     * Deliver buffered reports at the end of each unit of work.
+     *
+     * There is no single correct flush point, so there is no single
+     * listener. Each context ends differently, and picking one boundary
+     * silently loses reports in the others:
+     *
+     * - HTTP ends at terminate(), after the response has been sent. Octane
+     *   runs each request against a cloned container and flushes it, so the
+     *   callback does not accumulate the way it would in a bare long-lived
+     *   process.
+     * - Queue workers never call terminate() at all. JobAttempted is
+     *   dispatched from a finally block after every attempt, so unlike
+     *   JobProcessed (success only) and JobFailed (final failure only) it
+     *   also covers the ordinary case of a job that threw and will retry.
+     *   Looping catches reports raised between jobs, and WorkerStopping
+     *   catches a graceful shutdown.
+     * - Console commands end at CommandFinished. A worker is itself a
+     *   console command, so for queue:work this fires once, at exit.
+     * - register_shutdown_function is the backstop for the fatals none of
+     *   the above survive. It cannot save an OOM kill or a SIGKILL.
+     */
+    protected function registerReportFlushing(): void
+    {
+        if (! config('heybug.async', false)) {
+            return;
+        }
+
+        // Resolution happens outside flush()'s own error handling, so it is
+        // guarded here. A shutdown function in particular runs after the
+        // container may already have been torn down, where make() throws
+        // rather than returning anything to flush.
+        //
+        // An unresolved singleton has never buffered anything, so there is
+        // nothing to deliver and nothing to build it for.
+        $flush = function (): void {
+            try {
+                if (! $this->app->resolved('heybug')) {
+                    return;
+                }
+
+                $this->app->make('heybug')->flush();
+            } catch (Throwable) {
+                // Nothing safe is left to do at this point.
+            }
+        };
+
+        $this->app->terminating($flush);
+
+        $events = $this->app['events'];
+
+        foreach ([JobAttempted::class, Looping::class, WorkerStopping::class, CommandFinished::class] as $event) {
+            $events->listen($event, $flush);
+        }
+
+        register_shutdown_function($flush);
     }
 
     /**

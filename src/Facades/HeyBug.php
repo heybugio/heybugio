@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Facade;
  * @method static void context(array $context)
  * @method static void clearContext()
  * @method static bool handle(\Throwable $exception)
+ * @method static void flush()
+ * @method static bool isDeferred()
  * @method static string|null getLastExceptionId()
  *
  * @see \HeyBug\HeyBug

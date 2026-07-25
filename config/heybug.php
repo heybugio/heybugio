@@ -72,6 +72,49 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Deferred Delivery
+    |--------------------------------------------------------------------------
+    |
+    | By default a report is POSTed inline, so the request or job waits for
+    | it. Turn this on to hold reports in memory and deliver them at the end
+    | of the current unit of work instead: after the response is sent for
+    | HTTP, after each job attempt for queue workers, at exit for console
+    | commands, with a shutdown-function backstop for fatals.
+    |
+    | This changes what handle() returns. Deferred, it reports whether the
+    | exception was accepted for delivery, since no response exists yet;
+    | inline, it still reports whether the server accepted it.
+    |
+    */
+    'async' => env('HEYBUG_ASYNC', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Buffer Limit
+    |--------------------------------------------------------------------------
+    |
+    | The most reports held between flushes while deferred. Beyond this,
+    | further reports are dropped and the count is logged, so that a process
+    | generating reports faster than it flushes them cannot grow without
+    | bound. A request or a single job is naturally short; a long-running
+    | console command may want a higher figure.
+    |
+    */
+    'buffer_limit' => 100,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Log Channel
+    |--------------------------------------------------------------------------
+    |
+    | Where the package writes its own diagnostics, such as dropped reports.
+    | This must not be the heybug channel.
+    |
+    */
+    'log_channel' => env('HEYBUG_LOG_CHANNEL', 'single'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Duplicate Prevention
     |--------------------------------------------------------------------------
     |

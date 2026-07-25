@@ -3,10 +3,13 @@
 namespace HeyBug;
 
 use HeyBug\Http\Client;
+use HeyBug\Reporting\Buffer;
+use HeyBug\Reporting\Envelope;
 use HeyBug\Support\DataFilter;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Request;
 use Throwable;
 
@@ -18,14 +21,81 @@ class HeyBug
     protected const MAX_EXECUTOR_LINES = 50;
 
     protected Client $client;
+    protected Buffer $buffer;
     protected DataFilter $dataFilter;
     protected ?string $lastExceptionId = null;
     protected static array $customContext = [];
 
-    public function __construct(Client $client)
+    public function __construct(Client $client, ?Buffer $buffer = null)
     {
         $this->client = $client;
+        $this->buffer = $buffer ?? new Buffer((int) config('heybug.buffer_limit', 100));
         $this->dataFilter = new DataFilter($this->blacklist());
+    }
+
+    /**
+     * Whether reports are held for the next boundary rather than sent inline.
+     */
+    public function isDeferred(): bool
+    {
+        return (bool) config('heybug.async', false);
+    }
+
+    /**
+     * Deliver everything buffered since the last boundary.
+     *
+     * Never throws and never returns a value. It runs from event listeners
+     * and shutdown functions, including Looping, which the queue worker
+     * dispatches with `until()` — a non-null return there would halt the
+     * worker's own check and stop it picking up jobs.
+     */
+    public function flush(): void
+    {
+        try {
+            if ($this->buffer->isEmpty() && $this->buffer->dropped() === 0) {
+                return;
+            }
+
+            $batch = $this->buffer->take();
+
+            foreach ($batch->envelopes as $envelope) {
+                $response = $this->client->report($envelope->toArray(), $envelope->type);
+
+                if ($response && $envelope->type === 'default') {
+                    $this->lastExceptionId = $response['id'] ?? null;
+                }
+            }
+
+            $this->reportDroppedReports($batch->dropped);
+        } catch (Throwable) {
+            // Flushing must never escalate into the context that triggered it.
+        }
+    }
+
+    /**
+     * Make buffer overflow visible.
+     *
+     * A drop count nothing reads is the same as no drop count. This is
+     * logged rather than reported to HeyBug so that a full buffer cannot
+     * generate more traffic through the buffer that is already full. The
+     * log channel is safe from recursion because HeyBugHandler only reports
+     * records carrying a Throwable, and this one does not.
+     */
+    protected function reportDroppedReports(int $dropped): void
+    {
+        if ($dropped === 0) {
+            return;
+        }
+
+        try {
+            Log::channel(config('heybug.log_channel', 'single'))->warning(
+                "HeyBug dropped {$dropped} report(s): the buffer limit of "
+                .$this->buffer->limit().' was reached before the next flush. '
+                .'Raise heybug.buffer_limit if this recurs.'
+            );
+        } catch (Throwable) {
+            // A missing or misconfigured channel must not break the flush.
+        }
     }
 
     /**
@@ -84,10 +154,43 @@ class HeyBug
             return false;
         }
 
-        $response = $this->client->report([
+        $envelope = new Envelope('default', [
             'exception' => $data,
             'user' => $this->getUser(),
         ]);
+
+        return $this->isDeferred()
+            ? $this->bufferReport($envelope, $data)
+            : $this->sendReport($envelope, $data);
+    }
+
+    /**
+     * Hold a report for the next flush boundary.
+     *
+     * The dedup marker is written here, when the report is buffered, rather
+     * than at flush time. Dedup is the behaviour people configure, and a
+     * marker that waited for delivery would let every duplicate through
+     * until the boundary came around. The cost is that a flush which fails
+     * still suppresses the next identical exception for the sleep window;
+     * that becomes fixable once envelopes carry a client-minted ID and
+     * failed batches can be retried instead of dropped.
+     */
+    protected function bufferReport(Envelope $envelope, array $data): bool
+    {
+        if (! $this->buffer->add($envelope)) {
+            return false;
+        }
+
+        if (config('heybug.sleep', 60) > 0) {
+            $this->sleep($data);
+        }
+
+        return true;
+    }
+
+    protected function sendReport(Envelope $envelope, array $data): bool
+    {
+        $response = $this->client->report($envelope->toArray(), $envelope->type);
 
         if ($response) {
             $this->lastExceptionId = $response['id'] ?? null;
