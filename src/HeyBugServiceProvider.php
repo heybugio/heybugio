@@ -8,6 +8,7 @@ use HeyBug\Logger\HeyBugHandler;
 use HeyBug\Queue\JobEventSubscriber;
 use HeyBug\Support\Dsn;
 use Illuminate\Log\LogManager;
+use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\ServiceProvider;
 use Monolog\Logger;
 
@@ -29,7 +30,36 @@ class HeyBugServiceProvider extends ServiceProvider
             );
         }
 
+        $this->registerContextFlushing();
         $this->registerLogDriver();
+    }
+
+    /**
+     * Discard custom context at the start of every unit of work.
+     *
+     * Under a long-running process (Octane, queue workers) the container and
+     * its singletons outlive a single request or job, so context set during
+     * one would otherwise stay in memory and attach itself to an unrelated
+     * report later on.
+     */
+    protected function registerContextFlushing(): void
+    {
+        $events = $this->app['events'];
+
+        $flush = static fn () => HeyBug::clearContext();
+
+        $events->listen(JobProcessing::class, $flush);
+
+        /** @var list<class-string> $octaneEvents */
+        $octaneEvents = [
+            'Laravel\Octane\Events\RequestReceived',
+            'Laravel\Octane\Events\TaskReceived',
+            'Laravel\Octane\Events\TickReceived',
+        ];
+
+        foreach ($octaneEvents as $event) {
+            $events->listen($event, $flush);
+        }
     }
 
     protected function registerLogDriver(): void

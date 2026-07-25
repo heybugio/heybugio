@@ -7,7 +7,9 @@ return [
     |--------------------------------------------------------------------------
     |
     | Single string to configure HeyBug.
-    | Format: https://{api_key}:{project_id}@api.heybug.io
+    | Format: https://{api_key}:{project_id}@api.heybug.io/{ingestion-path}
+    | Include the ingestion path if your server expects reports at a
+    | specific route rather than the bare host.
     |
     */
     'dsn' => env('HEYBUG_DSN'),
@@ -66,20 +68,43 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | User Details
+    |--------------------------------------------------------------------------
+    |
+    | Whether to attach the authenticated user to reports, and which
+    | attributes to send. Attributes listed in the model's $hidden are
+    | never sent, regardless of this list.
+    |
+    */
+    'send_user' => env('HEYBUG_SEND_USER', true),
+
+    'user_attributes' => ['id', 'name', 'email'],
+
+    /*
+    |--------------------------------------------------------------------------
     | Sensitive Data Filtering
     |--------------------------------------------------------------------------
     |
     | Keys matching these patterns will be filtered. Supports wildcards.
+    | Patterns are matched against the lowercased key, so they must be
+    | narrow enough to avoid eating ordinary fields: "*key*" would also
+    | redact "monkey" and "keyword", "*auth*" would redact "author".
     |
     */
     'blacklist' => [
         '*password*',
         '*token*',
         '*secret*',
-        '*key*',
-        '*auth*',
+        '*_key*',
+        '*-key*',
+        '*apikey*',
+        'auth',
+        'authorization',
         '*credit*',
-        '*card*',
+        '*card_number*',
+        '*cardnumber*',
+        '*cvv*',
+        '*cvc*',
     ],
 
     /*

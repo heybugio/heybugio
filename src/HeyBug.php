@@ -4,6 +4,7 @@ namespace HeyBug;
 
 use HeyBug\Http\Client;
 use HeyBug\Support\DataFilter;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Request;
@@ -32,7 +33,25 @@ class HeyBug
         self::$customContext = [];
     }
 
+    /**
+     * Report an exception.
+     *
+     * Custom context is always discarded once this method returns, on every
+     * path, so it can never carry over into an unrelated report.
+     */
     public function handle(Throwable $exception): bool
+    {
+        try {
+            return $this->report($exception);
+        } catch (Throwable) {
+            // Reporting must never escalate the exception it is reporting.
+            return false;
+        } finally {
+            self::$customContext = [];
+        }
+    }
+
+    protected function report(Throwable $exception): bool
     {
         if ($this->shouldSkip($exception)) {
             return false;
@@ -79,7 +98,6 @@ class HeyBug
 
         if (! empty(self::$customContext)) {
             $data['custom_data'] = self::$customContext;
-            self::$customContext = [];
         }
 
         return $data;
@@ -144,12 +162,21 @@ class HeyBug
 
     protected function getUser(): ?array
     {
+        if (! config('heybug.send_user', true)) {
+            return null;
+        }
+
         try {
             if (function_exists('auth') && auth()->check()) {
                 $user = auth()->user();
 
-                if ($user instanceof \Illuminate\Database\Eloquent\Model) {
-                    return $user->only(['id', 'name', 'email']);
+                if ($user instanceof Model) {
+                    $attributes = array_diff(
+                        config('heybug.user_attributes', ['id', 'name', 'email']),
+                        $user->getHidden()
+                    );
+
+                    return $this->dataFilter->filter($user->only($attributes));
                 }
             }
         } catch (Throwable) {
@@ -167,9 +194,13 @@ class HeyBug
             return true;
         }
 
-        $except = config('heybug.except', []);
+        foreach (config('heybug.except', []) as $class) {
+            if ($exception instanceof $class) {
+                return true;
+            }
+        }
 
-        return in_array(get_class($exception), $except);
+        return false;
     }
 
     protected function isSleeping(array $data): bool
@@ -200,5 +231,10 @@ class HeyBug
     public function getLastExceptionId(): ?string
     {
         return $this->lastExceptionId;
+    }
+
+    public function getLastError(): ?string
+    {
+        return $this->client->getLastError();
     }
 }

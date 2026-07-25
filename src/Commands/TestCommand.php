@@ -51,7 +51,12 @@ class TestCommand extends Command
 
             $this->newLine();
             $this->error('✗ Failed to send test exception.');
-            $this->line('  The server did not accept the request.');
+
+            if ($lastError = $heybug->getLastError()) {
+                $this->line("  {$lastError}");
+            } else {
+                $this->line('  The server did not accept the request.');
+            }
 
             return self::FAILURE;
         } catch (Exception $e) {

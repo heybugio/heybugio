@@ -10,6 +10,7 @@ class Client
     protected string $apiKey;
     protected string $projectId;
     protected string $server;
+    protected ?string $lastError = null;
 
     public function __construct(string $apiKey, string $projectId, string $server)
     {
@@ -20,7 +21,11 @@ class Client
 
     public function report(array $data, string $type = 'default'): ?array
     {
+        $this->lastError = null;
+
         if (empty($this->apiKey) || empty($this->projectId)) {
+            $this->lastError = 'Missing API key or project ID.';
+
             return null;
         }
 
@@ -30,7 +35,7 @@ class Client
                     'X-HeyBug-DSN' => $this->buildDsn(),
                     'Content-Type' => 'application/json',
                     'Accept' => 'application/json',
-                    'User-Agent' => 'HeyBug-Laravel-SDK/1.1',
+                    'User-Agent' => 'HeyBug-Laravel-SDK/1.2',
                 ])
                 ->post($this->server, array_merge([
                     'project' => $this->projectId,
@@ -40,11 +45,22 @@ class Client
             if ($response->successful()) {
                 return $response->json();
             }
-        } catch (Throwable) {
-            // Fail silently - never break user's application
+
+            $this->lastError = "HTTP {$response->status()} from {$this->server}";
+
+            if ($allow = $response->header('Allow')) {
+                $this->lastError .= " (Allow: {$allow})";
+            }
+        } catch (Throwable $e) {
+            $this->lastError = $e->getMessage();
         }
 
         return null;
+    }
+
+    public function getLastError(): ?string
+    {
+        return $this->lastError;
     }
 
     public function reportJob(array $jobData): ?array

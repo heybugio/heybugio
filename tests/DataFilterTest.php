@@ -134,6 +134,54 @@ class DataFilterTest extends TestCase
         $this->assertEquals('john', $data['username']);
     }
 
+    public function test_the_default_blacklist_filters_credentials(): void
+    {
+        $filter = new DataFilter($this->defaultBlacklist());
+
+        $data = $filter->filter([
+            'api_key' => 'abc',
+            'apikey' => 'abc',
+            'x-api-key' => 'abc',
+            'secret_key' => 'abc',
+            'authorization' => 'Bearer abc',
+            'password_confirmation' => 'abc',
+            'stripe_token' => 'abc',
+            'card_number' => '4242424242424242',
+            'cvv' => '123',
+        ]);
+
+        foreach ($data as $key => $value) {
+            $this->assertEquals('[FILTERED]', $value, "Expected {$key} to be filtered.");
+        }
+    }
+
+    public function test_the_default_blacklist_does_not_filter_ordinary_fields(): void
+    {
+        $filter = new DataFilter($this->defaultBlacklist());
+
+        $data = $filter->filter([
+            'monkey' => 'george',
+            'keyword' => 'laravel',
+            'author' => 'John Doe',
+            'authored_at' => '2026-01-01',
+            'discard' => 'yes',
+            'wildcard' => '*',
+            'email' => 'john@example.com',
+        ]);
+
+        foreach ($data as $key => $value) {
+            $this->assertNotEquals('[FILTERED]', $value, "Expected {$key} to be preserved.");
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function defaultBlacklist(): array
+    {
+        return (require __DIR__.'/../config/heybug.php')['blacklist'];
+    }
+
     public function test_it_handles_numeric_keys(): void
     {
         $filter = new DataFilter(['*password*']);

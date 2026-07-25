@@ -23,8 +23,15 @@ class DsnTest extends TestCase
 
         $this->assertEquals('api-key', $dsn->getApiKey());
         $this->assertEquals('project-id', $dsn->getProjectId());
-        // Path is ignored - server is just the host
-        $this->assertEquals('https://api.heybug.io', $dsn->getServer());
+        // Path is preserved - the SDK posts to server + path as-is
+        $this->assertEquals('https://api.heybug.io/api/log', $dsn->getServer());
+    }
+
+    public function test_it_strips_trailing_slash_from_path(): void
+    {
+        $dsn = Dsn::make('https://api-key:project-id@api.heybug.io/api/log/');
+
+        $this->assertEquals('https://api.heybug.io/api/log', $dsn->getServer());
     }
 
     public function test_it_parses_dsn_with_http(): void

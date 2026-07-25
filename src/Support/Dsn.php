@@ -31,8 +31,9 @@ class Dsn
         $scheme = $parsed['scheme'] ?? 'https';
         $host = $parsed['host'];
         $port = isset($parsed['port']) ? ":{$parsed['port']}" : '';
+        $path = isset($parsed['path']) ? rtrim($parsed['path'], '/') : '';
 
-        $this->server = "{$scheme}://{$host}{$port}";
+        $this->server = "{$scheme}://{$host}{$port}{$path}";
     }
 
     public function getApiKey(): string
