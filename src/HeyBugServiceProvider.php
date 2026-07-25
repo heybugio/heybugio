@@ -46,10 +46,16 @@ class HeyBugServiceProvider extends ServiceProvider
     /**
      * Deliver any partial batch of job records before the process ends.
      *
-     * Deliberately only the coarse boundaries. The per-job events are where
-     * the records are produced, so flushing there would defeat the batching
-     * this exists to do. This runs whether or not deferred delivery is on,
-     * since job records batch regardless.
+     * Unconditionally only on the coarse boundaries. The per-job events are
+     * where the records are produced, so flushing there would defeat the
+     * batching this exists to do. This runs whether or not deferred delivery
+     * is on, since job records batch regardless.
+     *
+     * Looping is the exception, and is bound to the interval-gated flush
+     * rather than the unconditional one. It fires between every job, so
+     * flushing it outright would send batches of one, but it also keeps
+     * firing while the queue is empty, which is the only signal an idle
+     * worker gets that its partial batch has been waiting.
      */
     protected function registerJobBatchFlushing(JobEventSubscriber $subscriber): void
     {
@@ -62,6 +68,10 @@ class HeyBugServiceProvider extends ServiceProvider
         foreach ([WorkerStopping::class, CommandFinished::class] as $event) {
             $this->app['events']->listen($event, $flush);
         }
+
+        $this->app['events']->listen(Looping::class, static function () use ($subscriber): void {
+            $subscriber->flushIfDue();
+        });
 
         register_shutdown_function($flush);
     }

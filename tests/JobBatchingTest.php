@@ -7,7 +7,9 @@ use HeyBug\Http\Client;
 use HeyBug\Queue\JobEventSubscriber;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Contracts\Queue\Job;
+use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\Looping;
 use Illuminate\Queue\Events\WorkerStopping;
 use Illuminate\Queue\WorkerOptions;
 use Illuminate\Support\Facades\Http;
@@ -154,10 +156,123 @@ class JobBatchingTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_it_delivers_a_partial_batch_once_the_interval_has_passed(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true], 200),
+        ]);
+
+        $subscriber = new JobEventSubscriber(app(Client::class));
+        $subscriber->handleJobProcessed(new JobProcessed('sync', $this->createStub(Job::class)));
+
+        $subscriber->flushIfDue();
+
+        Http::assertNothingSent();
+
+        $this->age($subscriber, 31);
+        $subscriber->flushIfDue();
+
+        Http::assertSent(fn ($request) => $request['count'] === 1);
+    }
+
+    public function test_a_zero_interval_batches_on_size_alone(): void
+    {
+        Http::fake();
+
+        config(['heybug.queue.flush_interval' => 0]);
+
+        $subscriber = new JobEventSubscriber(app(Client::class));
+        $subscriber->handleJobProcessed(new JobProcessed('sync', $this->createStub(Job::class)));
+
+        $this->age($subscriber, 3600);
+        $subscriber->flushIfDue();
+
+        Http::assertNothingSent();
+    }
+
+    public function test_an_empty_flush_still_restarts_the_interval(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true], 200),
+        ]);
+
+        $subscriber = new JobEventSubscriber(app(Client::class));
+
+        // An expired clock that a no-op flush left untouched would make the
+        // very next record send on its own, batching nothing.
+        $this->age($subscriber, 31);
+        $subscriber->flush();
+
+        $subscriber->handleJobProcessed(new JobProcessed('sync', $this->createStub(Job::class)));
+
+        Http::assertNothingSent();
+    }
+
+    public function test_looping_delivers_a_waiting_batch_without_halting_the_worker(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true], 200),
+        ]);
+
+        $this->processJobs(1);
+
+        // The worker dispatches Looping with until(); a non-null return from
+        // any listener stops it picking up work.
+        $result = $this->app['events']->until(new Looping('sync', 'default', new WorkerOptions));
+
+        $this->assertNull($result);
+    }
+
+    public function test_looping_does_not_send_a_batch_that_has_not_waited(): void
+    {
+        Http::fake();
+
+        $this->processJobs(2);
+
+        event(new Looping('sync', 'default', new WorkerOptions));
+
+        Http::assertNothingSent();
+    }
+
+    public function test_it_clips_an_oversized_failure_message(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true], 200),
+        ]);
+
+        config(['heybug.queue.max_payload_size' => 2000]);
+
+        $subscriber = new JobEventSubscriber(app(Client::class));
+        $subscriber->handleJobFailed(new JobFailed(
+            'sync',
+            $this->createStub(Job::class),
+            new Exception(str_repeat('x', 100_000))
+        ));
+
+        $subscriber->flush();
+
+        Http::assertSent(function ($request) {
+            $record = $request['jobs'][0];
+
+            $this->assertStringEndsWith('[truncated]', $record['error']);
+
+            return strlen((string) json_encode($record)) <= 2000;
+        });
+    }
+
     protected function processJobs(int $count): void
     {
         foreach (range(1, $count) as $i) {
             event(new JobProcessed('sync', $this->createStub(Job::class)));
         }
+    }
+
+    /**
+     * Pretend the subscriber's last flush happened this many seconds ago.
+     */
+    protected function age(JobEventSubscriber $subscriber, int $seconds): void
+    {
+        (new \ReflectionProperty($subscriber, 'lastFlushAt'))
+            ->setValue($subscriber, time() - $seconds);
     }
 }

@@ -124,6 +124,36 @@ Diagnostics like drop counts are written to a normal log channel, which must not
 
 `heybug:test` always sends inline, whatever this is set to, since a diagnostic that reported "buffered" would tell you nothing about whether your credentials work.
 
+## Queue Monitoring
+
+Off by default. Turn it on to record how your queue jobs are doing, separately from exception reporting:
+
+```php
+'queue' => [
+    'enabled' => env('HEYBUG_QUEUE_ENABLED', false),
+
+    'batch_size' => 20,        // records to accumulate before delivering
+    'flush_interval' => 30,    // seconds a partial batch may wait
+    'max_payload_size' => 10000,
+
+    'track_processing' => false,
+    'track_completed' => true,
+    'track_failed' => true,
+
+    'only_queues' => [],
+    'ignore_queues' => [],
+    'ignore_jobs' => [],
+],
+```
+
+Job telemetry is high volume and low value per record, so records are batched rather than sent individually. They go out when `batch_size` accumulates, when `flush_interval` seconds have passed with a partial batch waiting, or when the worker stops.
+
+Both ceilings matter. Without the interval a quiet queue holds records until `batch_size` is reached, which on a low-traffic worker can be hours - and they are lost if the worker is killed first. Set it to `0` to batch on size alone.
+
+A record is job metadata the worker already knows - name, queue, connection, attempt, duration, memory - so there is nothing in it for key-based scrubbing to filter. The exception is a failed job's error message, which carries whatever the exception said and is clipped to fit `max_payload_size`.
+
+`batch_size` is capped by `buffer_limit`: a threshold above the buffer could never be reached, so every record past the cap would be dropped and nothing would ever send.
+
 ## Testing
 
 `HeyBug::fake()` records reports instead of delivering them:

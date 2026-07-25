@@ -6,6 +6,7 @@ use HeyBug\Http\Client;
 use HeyBug\Reporting\Buffer;
 use HeyBug\Reporting\DropLog;
 use HeyBug\Reporting\Envelope;
+use HeyBug\Reporting\PayloadLimit;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
@@ -17,12 +18,14 @@ class JobEventSubscriber
     protected Client $client;
     protected JobDataCollector $collector;
     protected Buffer $buffer;
+    protected int $lastFlushAt;
 
     public function __construct(Client $client, ?Buffer $buffer = null)
     {
         $this->client = $client;
         $this->collector = new JobDataCollector;
         $this->buffer = $buffer ?? new Buffer((int) config('heybug.buffer_limit', 100));
+        $this->lastFlushAt = time();
     }
 
     /**
@@ -107,14 +110,48 @@ class JobEventSubscriber
      * inside a single Worker::process() call and Looping fires between
      * every job, so flushing at any of them would send batches of one and
      * batch nothing at all.
+     *
+     * A threshold alone leaves a quiet worker holding records indefinitely,
+     * so the interval below delivers a partial batch once it has waited long
+     * enough.
      */
     protected function send(array $jobData): void
     {
-        $this->buffer->add(new Envelope('queue_job', $jobData));
+        $this->buffer->add(new Envelope('queue_job', PayloadLimit::apply(
+            $jobData,
+            (int) config('heybug.queue.max_payload_size', 10000)
+        )));
 
-        if ($this->buffer->count() >= $this->batchSize()) {
+        if ($this->buffer->count() >= $this->batchSize() || $this->intervalElapsed()) {
             $this->flush();
         }
+    }
+
+    /**
+     * Deliver a waiting batch that has sat for longer than the interval.
+     *
+     * Wired to Looping, which fires between jobs and keeps firing while the
+     * queue is empty, so an idle worker still delivers what it is holding.
+     * Returns nothing: the worker dispatches Looping with until(), where a
+     * non-null return would stop it picking up work.
+     */
+    public function flushIfDue(): void
+    {
+        if ($this->buffer->isEmpty() || ! $this->intervalElapsed()) {
+            return;
+        }
+
+        $this->flush();
+    }
+
+    /**
+     * Whether the batch has been waiting longer than the flush interval.
+     */
+    protected function intervalElapsed(): bool
+    {
+        $interval = (int) config('heybug.queue.flush_interval', 30);
+
+        return $interval > 0 && (time() - $this->lastFlushAt) >= $interval;
     }
 
     /**
@@ -128,6 +165,11 @@ class JobEventSubscriber
      */
     public function flush(): void
     {
+        // Reset before the early return, so an empty flush still restarts the
+        // interval. Otherwise the clock stays expired and the next record
+        // sends on its own, batching nothing.
+        $this->lastFlushAt = time();
+
         try {
             if ($this->buffer->isEmpty() && $this->buffer->dropped() === 0) {
                 return;

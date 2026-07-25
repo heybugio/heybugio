@@ -230,6 +230,22 @@ return [
          */
         'batch_size' => 20,
 
+        /*
+         | Seconds a partial batch may wait before being delivered anyway.
+         | Without this a quiet worker holds records until batch_size is
+         | reached, which on a low-traffic queue can be hours, and loses them
+         | entirely if it is killed. Checked between jobs, so it keeps working
+         | while the queue is empty. Set to 0 to batch on size alone.
+         */
+        'flush_interval' => 30,
+
+        /*
+         | The most bytes one job record may occupy. Every field is job
+         | metadata the worker already knows except the failure message,
+         | which carries whatever the exception said and is clipped to fit.
+         */
+        'max_payload_size' => 10000,
+
         'track_processing' => false,
         'track_completed' => true,
         'track_failed' => true,

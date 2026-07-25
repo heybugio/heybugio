@@ -2,22 +2,24 @@
 
 namespace HeyBug\Queue;
 
-use HeyBug\Support\DataFilter;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 
+/**
+ * Builds the record describing one queue job event.
+ *
+ * Every field here is job metadata the worker already knows — no request
+ * data, no job payload — so there is nothing key-based scrubbing would
+ * apply to. The one field carrying arbitrary text is the failure message,
+ * and a secret inside a message is a value, not a key, which a blacklist
+ * cannot reach either way. The size of that message is bounded by
+ * PayloadLimit where the record is buffered.
+ */
 class JobDataCollector
 {
-    protected DataFilter $dataFilter;
-
     protected static array $timingCache = [];
-
-    public function __construct()
-    {
-        $this->dataFilter = new DataFilter(config('heybug.blacklist', []));
-    }
 
     public function collectFromProcessing(JobProcessing $event): array
     {
