@@ -168,6 +168,15 @@ return [
     */
     'queue' => [
         'enabled' => env('HEYBUG_QUEUE_ENABLED', false),
+
+        /*
+         | How many job records to accumulate before delivering them in one
+         | request. Records are also delivered when a worker stops, a console
+         | command finishes, or the process shuts down, so a partial batch is
+         | not left behind. Set to 1 to send each record on its own.
+         */
+        'batch_size' => 20,
+
         'track_processing' => false,
         'track_completed' => true,
         'track_failed' => true,

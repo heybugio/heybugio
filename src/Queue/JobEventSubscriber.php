@@ -3,6 +3,9 @@
 namespace HeyBug\Queue;
 
 use HeyBug\Http\Client;
+use HeyBug\Reporting\Buffer;
+use HeyBug\Reporting\DropLog;
+use HeyBug\Reporting\Envelope;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
@@ -13,11 +16,13 @@ class JobEventSubscriber
 {
     protected Client $client;
     protected JobDataCollector $collector;
+    protected Buffer $buffer;
 
-    public function __construct(Client $client)
+    public function __construct(Client $client, ?Buffer $buffer = null)
     {
         $this->client = $client;
         $this->collector = new JobDataCollector;
+        $this->buffer = $buffer ?? new Buffer((int) config('heybug.buffer_limit', 100));
     }
 
     /**
@@ -25,8 +30,9 @@ class JobEventSubscriber
      *
      * Returning a map of method-name strings would have the dispatcher
      * register [static::class, 'method'] and resolve a new subscriber out
-     * of the container for every event, discarding any state the instance
-     * holds between events.
+     * of the container for every event. That was invisible while each event
+     * was POSTed on its own, but it gives every record its own empty buffer,
+     * so nothing ever accumulates and nothing is ever batched.
      */
     public function subscribe($events): void
     {
@@ -92,12 +98,66 @@ class JobEventSubscriber
         return true;
     }
 
+    /**
+     * Hold a job record, delivering once enough have accumulated.
+     *
+     * Job telemetry is high volume and low value per record, so it batches
+     * on a size threshold rather than at a boundary. The per-job boundaries
+     * are no use here: JobProcessed and JobAttempted are both dispatched
+     * inside a single Worker::process() call and Looping fires between
+     * every job, so flushing at any of them would send batches of one and
+     * batch nothing at all.
+     */
     protected function send(array $jobData): void
     {
-        try {
-            $this->client->reportJob($jobData);
-        } catch (Throwable) {
-            // Fail silently
+        $this->buffer->add(new Envelope('queue_job', $jobData));
+
+        if ($this->buffer->count() >= $this->batchSize()) {
+            $this->flush();
         }
+    }
+
+    /**
+     * Deliver whatever job records have accumulated.
+     *
+     * Called on the threshold above, and from the coarse boundaries — a
+     * worker stopping, a console command finishing, process shutdown — so
+     * that a partial batch is not left behind. A worker killed outright
+     * loses its partial batch; that is job telemetry rather than an error
+     * report, and re-delivering it is not worth the duplicate risk.
+     */
+    public function flush(): void
+    {
+        try {
+            if ($this->buffer->isEmpty() && $this->buffer->dropped() === 0) {
+                return;
+            }
+
+            $batch = $this->buffer->take();
+
+            if ($batch->envelopes !== []) {
+                $this->client->reportJobsBatch(
+                    array_map(fn (Envelope $envelope): array => $envelope->payload, $batch->envelopes)
+                );
+            }
+
+            DropLog::record($batch->dropped, $this->buffer->limit(), 'job record(s)');
+        } catch (Throwable) {
+            // Job monitoring must never break the queue it is monitoring.
+        }
+    }
+
+    /**
+     * How many records to accumulate before delivering.
+     *
+     * Capped by the buffer limit, since a threshold above the cap could
+     * never be reached and every record past the cap would be dropped.
+     */
+    protected function batchSize(): int
+    {
+        return max(1, min(
+            (int) config('heybug.queue.batch_size', 20),
+            (int) config('heybug.buffer_limit', 100),
+        ));
     }
 }

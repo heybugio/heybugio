@@ -4,12 +4,12 @@ namespace HeyBug;
 
 use HeyBug\Http\Client;
 use HeyBug\Reporting\Buffer;
+use HeyBug\Reporting\DropLog;
 use HeyBug\Reporting\Envelope;
 use HeyBug\Support\DataFilter;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Request;
 use Throwable;
 
@@ -66,35 +66,9 @@ class HeyBug
                 }
             }
 
-            $this->reportDroppedReports($batch->dropped);
+            DropLog::record($batch->dropped, $this->buffer->limit(), 'report(s)');
         } catch (Throwable) {
             // Flushing must never escalate into the context that triggered it.
-        }
-    }
-
-    /**
-     * Make buffer overflow visible.
-     *
-     * A drop count nothing reads is the same as no drop count. This is
-     * logged rather than reported to HeyBug so that a full buffer cannot
-     * generate more traffic through the buffer that is already full. The
-     * log channel is safe from recursion because HeyBugHandler only reports
-     * records carrying a Throwable, and this one does not.
-     */
-    protected function reportDroppedReports(int $dropped): void
-    {
-        if ($dropped === 0) {
-            return;
-        }
-
-        try {
-            Log::channel(config('heybug.log_channel', 'single'))->warning(
-                "HeyBug dropped {$dropped} report(s): the buffer limit of "
-                .$this->buffer->limit().' was reached before the next flush. '
-                .'Raise heybug.buffer_limit if this recurs.'
-            );
-        } catch (Throwable) {
-            // A missing or misconfigured channel must not break the flush.
         }
     }
 

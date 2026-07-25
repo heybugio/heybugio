@@ -31,14 +31,39 @@ class HeyBugServiceProvider extends ServiceProvider
         }
 
         if (config('heybug.queue.enabled', false)) {
-            $this->app['events']->subscribe(
-                new JobEventSubscriber($this->app[Client::class])
-            );
+            $subscriber = new JobEventSubscriber($this->app[Client::class]);
+
+            $this->app['events']->subscribe($subscriber);
+
+            $this->registerJobBatchFlushing($subscriber);
         }
 
         $this->registerContextFlushing();
         $this->registerReportFlushing();
         $this->registerLogDriver();
+    }
+
+    /**
+     * Deliver any partial batch of job records before the process ends.
+     *
+     * Deliberately only the coarse boundaries. The per-job events are where
+     * the records are produced, so flushing there would defeat the batching
+     * this exists to do. This runs whether or not deferred delivery is on,
+     * since job records batch regardless.
+     */
+    protected function registerJobBatchFlushing(JobEventSubscriber $subscriber): void
+    {
+        $flush = static function () use ($subscriber): void {
+            $subscriber->flush();
+        };
+
+        $this->app->terminating($flush);
+
+        foreach ([WorkerStopping::class, CommandFinished::class] as $event) {
+            $this->app['events']->listen($event, $flush);
+        }
+
+        register_shutdown_function($flush);
     }
 
     /**
