@@ -159,6 +159,49 @@ class HeyBugServiceProvider extends ServiceProvider
         }
     }
 
+    /**
+     * Back-fill nested settings blocks that a published config replaced.
+     *
+     * mergeConfigFrom is a shallow merge, so a config file published before
+     * a nested key existed replaces that whole block rather than merging
+     * with it — an app that published `queue` at 1.1 gets a `queue` array
+     * with no `batch_size` in it, however many releases later that key was
+     * added.
+     *
+     * Every nested read currently passes an inline default, which masks it,
+     * but that is a convention no one is obliged to follow: the first read
+     * written without one would be null for every app that published early.
+     * Merging the defaults back in makes the guarantee structural instead.
+     *
+     * Only associative blocks are merged. Lists — `blacklist`, `except`,
+     * `environments`, `user_attributes` — are replaced outright, which is
+     * the documented behaviour: the scrubbing baseline lives in
+     * DataFilter::defaults() precisely so that replacing the list cannot
+     * drop it.
+     */
+    protected function mergeNestedConfigDefaults(): void
+    {
+        if ($this->app->configurationIsCached()) {
+            return;
+        }
+
+        $defaults = require __DIR__.'/../config/heybug.php';
+
+        $config = $this->app['config'];
+
+        foreach ($defaults as $key => $value) {
+            if (! is_array($value) || array_is_list($value)) {
+                continue;
+            }
+
+            $published = $config->get("heybug.{$key}");
+
+            if (is_array($published)) {
+                $config->set("heybug.{$key}", array_merge($value, $published));
+            }
+        }
+    }
+
     protected function registerLogDriver(): void
     {
         $this->app->make(LogManager::class)->extend('heybug', function ($app, array $config) {
@@ -174,6 +217,7 @@ class HeyBugServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/heybug.php', 'heybug');
+        $this->mergeNestedConfigDefaults();
 
         $this->app->singleton(Client::class, function () {
             $dsn = config('heybug.dsn');
