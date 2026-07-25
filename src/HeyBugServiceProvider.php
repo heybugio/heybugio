@@ -8,6 +8,7 @@ use HeyBug\Logger\HeyBugHandler;
 use HeyBug\Queue\JobEventSubscriber;
 use HeyBug\Support\Dsn;
 use Illuminate\Console\Events\CommandFinished;
+use Illuminate\Container\Container;
 use Illuminate\Log\LogManager;
 use Illuminate\Queue\Events\JobAttempted;
 use Illuminate\Queue\Events\JobProcessing;
@@ -68,20 +69,27 @@ class HeyBugServiceProvider extends ServiceProvider
             return;
         }
 
-        // Resolution happens outside flush()'s own error handling, so it is
-        // guarded here. A shutdown function in particular runs after the
-        // container may already have been torn down, where make() throws
-        // rather than returning anything to flush.
+        // Resolved from the *current* container rather than the one captured
+        // at boot. Octane runs each request against a sandbox clone, and the
+        // singleton holding the buffer is created on that clone — the base
+        // application this provider booted against never resolves it, so a
+        // closure over $this->app would flush an empty buffer on the wrong
+        // instance and silently strand every report.
         //
-        // An unresolved singleton has never buffered anything, so there is
-        // nothing to deliver and nothing to build it for.
-        $flush = function (): void {
+        // Resolution happens outside flush()'s own error handling, so it is
+        // guarded here too: a shutdown function runs after the container may
+        // already have been torn down, where make() throws rather than
+        // returning anything to flush. An unresolved singleton has never
+        // buffered anything, so there is nothing to deliver either way.
+        $flush = static function (): void {
             try {
-                if (! $this->app->resolved('heybug')) {
+                $container = Container::getInstance();
+
+                if (! $container->resolved('heybug')) {
                     return;
                 }
 
-                $this->app->make('heybug')->flush();
+                $container->make('heybug')->flush();
             } catch (Throwable) {
                 // Nothing safe is left to do at this point.
             }
