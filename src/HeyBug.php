@@ -20,7 +20,23 @@ class HeyBug
     public function __construct(Client $client)
     {
         $this->client = $client;
-        $this->dataFilter = new DataFilter(config('heybug.blacklist', []));
+        $this->dataFilter = new DataFilter($this->blacklist());
+    }
+
+    /**
+     * The package baseline plus any patterns the application adds.
+     *
+     * @return list<string>
+     */
+    protected function blacklist(): array
+    {
+        $patterns = config('heybug.blacklist', []);
+
+        if (config('heybug.blacklist_defaults', true)) {
+            $patterns = array_merge(DataFilter::defaults(), $patterns);
+        }
+
+        return array_values(array_unique($patterns));
     }
 
     public static function context(array $context): void

@@ -14,6 +14,40 @@ class DataFilter
         $this->blacklist = array_map('strtolower', $blacklist);
     }
 
+    /**
+     * The patterns the package always scrubs.
+     *
+     * These ship in code rather than in the published config so that a
+     * config file published against an older release still picks up
+     * patterns added in later ones. Users add to this list via
+     * heybug.blacklist; they cannot remove from it except by turning
+     * heybug.blacklist_defaults off wholesale.
+     *
+     * Patterns are matched against the lowercased key, so they must be
+     * narrow enough to avoid eating ordinary fields: "*key*" would also
+     * redact "monkey" and "keyword", "*auth*" would redact "author".
+     *
+     * @return list<string>
+     */
+    public static function defaults(): array
+    {
+        return [
+            '*password*',
+            '*token*',
+            '*secret*',
+            '*_key*',
+            '*-key*',
+            '*apikey*',
+            'auth',
+            'authorization',
+            '*credit*',
+            '*card_number*',
+            '*cardnumber*',
+            '*cvv*',
+            '*cvc*',
+        ];
+    }
+
     public function filter(array $data): array
     {
         if (empty($data)) {

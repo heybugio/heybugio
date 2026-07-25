@@ -179,7 +179,7 @@ class DataFilterTest extends TestCase
      */
     protected function defaultBlacklist(): array
     {
-        return (require __DIR__.'/../config/heybug.php')['blacklist'];
+        return DataFilter::defaults();
     }
 
     public function test_it_handles_numeric_keys(): void

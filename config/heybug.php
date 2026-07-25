@@ -85,26 +85,22 @@ return [
     | Sensitive Data Filtering
     |--------------------------------------------------------------------------
     |
-    | Keys matching these patterns will be filtered. Supports wildcards.
-    | Patterns are matched against the lowercased key, so they must be
-    | narrow enough to avoid eating ordinary fields: "*key*" would also
-    | redact "monkey" and "keyword", "*auth*" would redact "author".
+    | Keys matching these patterns are replaced with [FILTERED]. Wildcards
+    | are supported and matching is case-insensitive.
+    |
+    | The package always applies its own baseline of patterns — passwords,
+    | tokens, secrets, API keys, card numbers — from DataFilter::defaults().
+    | Anything listed here is added to that baseline, so a config file
+    | published against an older release still picks up patterns added in
+    | later ones. Set blacklist_defaults to false to opt out of the
+    | baseline entirely and scrub only what you list here.
     |
     */
+    'blacklist_defaults' => true,
+
     'blacklist' => [
-        '*password*',
-        '*token*',
-        '*secret*',
-        '*_key*',
-        '*-key*',
-        '*apikey*',
-        'auth',
-        'authorization',
-        '*credit*',
-        '*card_number*',
-        '*cardnumber*',
-        '*cvv*',
-        '*cvc*',
+        // '*ssn*',
+        // '*passport*',
     ],
 
     /*

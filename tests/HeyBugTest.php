@@ -305,6 +305,56 @@ class HeyBugTest extends TestCase
         });
     }
 
+    public function test_it_applies_the_baseline_blacklist_when_the_app_overrides_it(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true, 'success' => true, 'id' => 'test-id'], 200),
+        ]);
+
+        // A config file published against an older release, missing patterns
+        // the package has added since.
+        config(['heybug.blacklist' => ['*legacy*']]);
+
+        $this->app->forgetInstance('heybug');
+
+        $this->post('/', ['password' => 'hunter2', 'legacy' => 'x', 'name' => 'John']);
+
+        app(HeyBug::class)->handle(new Exception('Test exception'));
+
+        Http::assertSent(function ($request) {
+            $parameters = $request['exception']['storage']['PARAMETERS'];
+
+            return $parameters['password'] === '[FILTERED]'
+                && $parameters['legacy'] === '[FILTERED]'
+                && $parameters['name'] === 'John';
+        });
+    }
+
+    public function test_it_can_opt_out_of_the_baseline_blacklist(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true, 'success' => true, 'id' => 'test-id'], 200),
+        ]);
+
+        config([
+            'heybug.blacklist_defaults' => false,
+            'heybug.blacklist' => ['*legacy*'],
+        ]);
+
+        $this->app->forgetInstance('heybug');
+
+        $this->post('/', ['password' => 'hunter2', 'legacy' => 'x']);
+
+        app(HeyBug::class)->handle(new Exception('Test exception'));
+
+        Http::assertSent(function ($request) {
+            $parameters = $request['exception']['storage']['PARAMETERS'];
+
+            return $parameters['password'] === 'hunter2'
+                && $parameters['legacy'] === '[FILTERED]';
+        });
+    }
+
     public function test_it_includes_exception_data(): void
     {
         Http::fake([

@@ -102,6 +102,37 @@ By default reports include the authenticated user's `id`, `name`, and `email`. A
 'user_attributes' => ['id'],
 ```
 
+## Filtering Sensitive Data
+
+The package always scrubs a baseline set of keys — passwords, tokens, secrets, API keys, card numbers — from cookies, session, headers, and request parameters. That baseline lives in code (`DataFilter::defaults()`), not in the published config, so patterns added in future releases apply without you republishing anything.
+
+`heybug.blacklist` adds to the baseline:
+
+```php
+'blacklist' => [
+    '*ssn*',
+    '*passport*',
+],
+```
+
+To scrub only your own patterns, set `'blacklist_defaults' => false`. This is all-or-nothing: there is no way to remove a single baseline pattern while keeping the rest.
+
+## Upgrading from 1.1.x
+
+**If you published `config/heybug.php`, edit your `blacklist` by hand.**
+
+`mergeConfigFrom` is a shallow merge, so a `blacklist` key in your published file replaces the package's list outright rather than merging with it. Upgrading alone therefore does not narrow it. The 1.1.x defaults were:
+
+```php
+'*password*', '*token*', '*secret*', '*key*', '*auth*', '*credit*', '*card*',
+```
+
+`*key*` also redacts `monkey`, `keyword`, and `sort_key`; `*auth*` also redacts `author` and `authored_at`; `*card*` also redacts `discard` and `wildcard`. Those are over-redactions, not leaks, so this is not urgent — but until you act, those fields keep arriving as `[FILTERED]`.
+
+Either delete the `blacklist` key from your published config (recommended — you then inherit the baseline and every future addition to it), or replace its contents with only the patterns you want to add on top of the baseline.
+
+Keys the package added in this release — `send_user`, `user_attributes`, `blacklist_defaults` — back-fill automatically, since a published file predating them has nothing to override.
+
 ## License
 
 The MIT License (MIT). Please see [License File](LICENSE) for more information.
