@@ -20,13 +20,19 @@ class JobEventSubscriber
         $this->collector = new JobDataCollector;
     }
 
-    public function subscribe($events): array
+    /**
+     * Bind the handlers to *this* instance.
+     *
+     * Returning a map of method-name strings would have the dispatcher
+     * register [static::class, 'method'] and resolve a new subscriber out
+     * of the container for every event, discarding any state the instance
+     * holds between events.
+     */
+    public function subscribe($events): void
     {
-        return [
-            JobProcessing::class => 'handleJobProcessing',
-            JobProcessed::class => 'handleJobProcessed',
-            JobFailed::class => 'handleJobFailed',
-        ];
+        $events->listen(JobProcessing::class, [$this, 'handleJobProcessing']);
+        $events->listen(JobProcessed::class, [$this, 'handleJobProcessed']);
+        $events->listen(JobFailed::class, [$this, 'handleJobFailed']);
     }
 
     public function handleJobProcessing(JobProcessing $event): void
