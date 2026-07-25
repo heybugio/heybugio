@@ -122,6 +122,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Release
+    |--------------------------------------------------------------------------
+    |
+    | Identifies the deploy a report came from, so an error can be traced to
+    | the version that introduced it. Any string will do — a tag, a build
+    | number, or the current commit:
+    |
+    |   'release' => trim(exec('git --git-dir '.base_path('.git').' log --pretty="%h" -n1 HEAD')),
+    |
+    | Prefer setting it from the environment. Shelling out to git runs on
+    | every boot, and the .git directory is often absent in production.
+    |
+    */
+    'release' => env('HEYBUG_RELEASE'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Payload Ceiling
     |--------------------------------------------------------------------------
     |

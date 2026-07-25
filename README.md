@@ -124,6 +124,48 @@ Diagnostics like drop counts are written to a normal log channel, which must not
 
 `heybug:test` always sends inline, whatever this is set to, since a diagnostic that reported "buffered" would tell you nothing about whether your credentials work.
 
+## Testing
+
+`HeyBug::fake()` records reports instead of delivering them:
+
+```php
+use HeyBug\Facades\HeyBug;
+
+HeyBug::fake();
+
+$this->post('/checkout', ['card_number' => '4242424242424242']);
+
+HeyBug::assertReported(PaymentFailed::class);
+HeyBug::assertReportedCount(1);
+HeyBug::assertNotReported(ValidationException::class);
+HeyBug::assertNothingReported();
+```
+
+Pass a callback to assert on the report itself. The payload is built exactly as it would be for a real one, so scrubbing, the payload ceiling, the authenticated user and custom context are all present:
+
+```php
+HeyBug::assertReported(PaymentFailed::class, function ($envelope) {
+    return $envelope->payload['exception']['custom_data']['order_id'] === 42
+        && $envelope->payload['exception']['storage']['PARAMETERS']['card_number'] === '[FILTERED]';
+});
+```
+
+`HeyBug::reported()` returns the recorded envelopes if you would rather inspect them directly.
+
+The fake replaces the container binding as well as the facade, so exceptions arriving through the log channel are recorded too - you do not need to report through the facade for this to work.
+
+Two gates are deliberately not applied while faking. Environment filtering would mean nothing records unless you added `testing` to `heybug.environments`, and the dedup window would make a second assertion depend on cache state left by the first. Both describe when a deployed app should report, which is not what a test is asking. `except` is still honoured, since ignoring a class is worth asserting.
+
+## Releases
+
+Tag reports with the deploy they came from, so an error can be traced to the version that introduced it:
+
+```php
+'release' => env('HEYBUG_RELEASE'),
+```
+
+Any string works - a tag, a build number, or the current commit. Set it from your deploy pipeline rather than shelling out to git on every boot, since the `.git` directory is often absent in production. Reports carry no `release` field at all when it is unset.
+
 ## Adding Context
 
 You can add custom context data to your error reports:
@@ -138,6 +180,8 @@ HeyBug::context([
 ```
 
 Context is scoped to the current request or job. It is discarded once an exception is handled, and again at the start of every queued job and every Octane request, so it can never attach itself to an unrelated report. Call `HeyBug::clearContext()` to drop it early.
+
+Context is scrubbed with the same patterns as the rest of the report, so a key like `api_token` is filtered here too.
 
 ## Reporting the Authenticated User
 

@@ -34,6 +34,47 @@ class HeyBugTest extends TestCase
         });
     }
 
+    public function test_it_scrubs_custom_context(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true, 'id' => 'test-id'], 200),
+        ]);
+
+        HeyBug::context(['stripe_token' => 'tok_live_1', 'order_id' => 42]);
+
+        app(HeyBug::class)->handle(new Exception('Charge declined'));
+
+        Http::assertSent(function ($request) {
+            $custom = $request['exception']['custom_data'];
+
+            return $custom['stripe_token'] === '[FILTERED]' && $custom['order_id'] === 42;
+        });
+    }
+
+    public function test_it_sends_the_configured_release(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true, 'id' => 'test-id'], 200),
+        ]);
+
+        config(['heybug.release' => 'a1b2c3d']);
+
+        app(HeyBug::class)->handle(new Exception('Test exception'));
+
+        Http::assertSent(fn ($request) => $request['exception']['release'] === 'a1b2c3d');
+    }
+
+    public function test_it_omits_the_release_when_unset(): void
+    {
+        Http::fake([
+            '*' => Http::response(['ok' => true, 'id' => 'test-id'], 200),
+        ]);
+
+        app(HeyBug::class)->handle(new Exception('Test exception'));
+
+        Http::assertSent(fn ($request) => ! array_key_exists('release', $request['exception']));
+    }
+
     public function test_it_keeps_a_reported_payload_within_the_ceiling(): void
     {
         Http::fake([

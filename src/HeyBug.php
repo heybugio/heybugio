@@ -225,8 +225,12 @@ class HeyBug
             'executor' => $this->buildExecutor($exception),
         ];
 
+        if ($release = config('heybug.release')) {
+            $data['release'] = $release;
+        }
+
         if (! empty(self::$customContext)) {
-            $data['custom_data'] = self::$customContext;
+            $data['custom_data'] = $this->dataFilter->filter(self::$customContext);
         }
 
         return PayloadLimit::apply($data, (int) config('heybug.max_payload_size', 65536));
