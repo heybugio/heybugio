@@ -213,8 +213,7 @@ class HeyBug
         $data = [
             'environment' => App::environment(),
             'host' => Request::server('SERVER_NAME') ?? gethostname(),
-            'method' => Request::method(),
-            'fullUrl' => Request::fullUrl(),
+            ...$this->buildOrigin(),
             'exception' => $exception->getMessage() ?: '-',
             'error' => $exception->getTraceAsString(),
             'line' => $exception->getLine(),
@@ -236,6 +235,37 @@ class HeyBug
         return PayloadLimit::apply($data, (int) config('heybug.max_payload_size', 65536));
     }
 
+    /**
+     * Where the exception came from.
+     *
+     * There is no request in console, but Request::method() answers GET and
+     * fullUrl() answers APP_URL regardless. Reporting those labels every
+     * queue worker, scheduler and command failure as a web request that
+     * never happened, which is worse than having no request context at all
+     * because it reads as true.
+     *
+     * Only the command name is carried, never its arguments: a command line
+     * holds whatever was typed, including credentials passed as options and,
+     * in the case of tinker, an entire script.
+     *
+     * @return array<string, string>
+     */
+    protected function buildOrigin(): array
+    {
+        if (! App::runningInConsole()) {
+            return [
+                'method' => Request::method(),
+                'fullUrl' => Request::fullUrl(),
+            ];
+        }
+
+        $argv = $_SERVER['argv'] ?? [];
+
+        return array_filter([
+            'command' => is_array($argv) && isset($argv[1]) && is_string($argv[1]) ? $argv[1] : null,
+        ]);
+    }
+
     protected function buildStorage(): array
     {
         return array_filter([
@@ -248,7 +278,12 @@ class HeyBug
             ],
             'COOKIE' => $this->dataFilter->filter(Request::cookie() ?? []),
             'SESSION' => $this->dataFilter->filter($this->getSession()),
-            'HEADERS' => $this->dataFilter->filter(Request::header() ?? []),
+            // Symfony synthesises headers for a console request — a Symfony
+            // user-agent, an en-us accept-language, an HTML accept — none of
+            // which any client sent. Empty here, so array_filter drops it.
+            'HEADERS' => App::runningInConsole()
+                ? []
+                : $this->dataFilter->filter(Request::header() ?? []),
             'PARAMETERS' => $this->dataFilter->filter(Request::all()),
         ]);
     }

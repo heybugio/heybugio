@@ -477,10 +477,10 @@ class HeyBugTest extends TestCase
         Http::assertSent(function ($request) {
             $exception = $request['exception'];
 
+            // method and fullUrl are request-only; in console the origin is
+            // the command name instead. See ConsoleContextTest.
             return isset($exception['environment'])
                 && isset($exception['host'])
-                && isset($exception['method'])
-                && isset($exception['fullUrl'])
                 && isset($exception['exception'])
                 && isset($exception['error'])
                 && isset($exception['line'])
